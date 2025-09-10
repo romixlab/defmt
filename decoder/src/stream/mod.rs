@@ -1,5 +1,5 @@
 mod raw;
-mod rzcobs;
+pub mod rzcobs;
 
 pub use raw::Raw;
 pub use rzcobs::Rzcobs;
