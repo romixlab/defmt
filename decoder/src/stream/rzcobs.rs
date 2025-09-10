@@ -5,7 +5,7 @@ use crate::{DecodeError, Frame, Table};
 ///
 /// `data` must be a full rzCOBS encoded message. Decoding partial
 /// messages is not possible. `data` must NOT include any `0x00` separator byte.
-fn rzcobs_decode(data: &[u8]) -> Result<Vec<u8>, DecodeError> {
+pub fn rzcobs_decode(data: &[u8]) -> Result<Vec<u8>, DecodeError> {
     let mut res = vec![];
     let mut data = data.iter().rev().cloned();
     while let Some(x) = data.next() {
@@ -51,6 +51,38 @@ impl<'a> Rzcobs<'a> {
             raw: Vec::new(),
         }
     }
+
+    pub fn frame_and_decode<F: FnMut(&[u8], Option<Frame<'_>>)>(&mut self, mut f: F) -> bool {
+        // Find frame separator. If not found, we don't have enough data yet.
+        let Some(zero) = self.raw.iter().position(|&x| x == 0) else {
+            return false;
+        };
+
+        let frame = rzcobs_decode(&self.raw[..zero]);
+
+        match frame.map(|f| self.table.decode(&f)) {
+            Ok(Ok((frame, _consumed))) => {
+                f(&self.raw[..zero], Some(frame));
+            }
+            Ok(Err(_e)) | Err(_e) => {
+                f(&self.raw[..zero], None);
+            }
+        }
+
+        self.advance(zero);
+        debug_assert!(self.raw.is_empty() || self.raw[0] != 0);
+        true
+    }
+
+    fn advance(&mut self, zero: usize) {
+        // Even if rzcobs_decode failed, pop the data off so we don't get stuck.
+        // Pop off the frame + 1 or more separator zero-bytes
+        if let Some(nonzero) = self.raw[zero..].iter().position(|&x| x != 0) {
+            self.raw.drain(0..zero + nonzero);
+        } else {
+            self.raw.clear();
+        }
+    }
 }
 
 impl StreamDecoder for Rzcobs<'_> {
@@ -74,16 +106,9 @@ impl StreamDecoder for Rzcobs<'_> {
             .ok_or(DecodeError::UnexpectedEof)?;
 
         let frame = rzcobs_decode(&self.raw[..zero]);
+        self.advance(zero);
 
-        // Even if it failed, pop the data off so we don't get stuck.
-        // Pop off the frame + 1 or more separator zero-bytes
-        if let Some(nonzero) = self.raw[zero..].iter().position(|&x| x != 0) {
-            self.raw.drain(0..zero + nonzero);
-        } else {
-            self.raw.clear();
-        }
-
-        assert!(self.raw.is_empty() || self.raw[0] != 0);
+        debug_assert!(self.raw.is_empty() || self.raw[0] != 0);
 
         let frame: Vec<u8> = frame?;
         match self.table.decode(&frame) {
