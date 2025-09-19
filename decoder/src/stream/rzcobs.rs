@@ -44,12 +44,59 @@ pub struct Rzcobs<'a> {
     raw: Vec<u8>,
 }
 
+pub struct RzcobsOwned {
+    table: Table,
+    raw: Vec<u8>,
+}
+
 impl<'a> Rzcobs<'a> {
     pub fn new(table: &'a Table) -> Self {
         Self {
             table,
             raw: Vec::new(),
         }
+    }
+}
+
+impl StreamDecoder for Rzcobs<'_> {
+    fn received(&mut self, data: &[u8]) {
+        received_inner(&mut self.raw, data);
+    }
+
+    fn decode(&mut self) -> Result<Frame<'_>, DecodeError> {
+        // Find frame separator. If not found, we don't have enough data yet.
+        let zero = self
+            .raw
+            .iter()
+            .position(|&x| x == 0)
+            .ok_or(DecodeError::UnexpectedEof)?;
+
+        let frame = rzcobs_decode(&self.raw[..zero]);
+        advance_inner(&mut self.raw, zero);
+
+        debug_assert!(self.raw.is_empty() || self.raw[0] != 0);
+
+        let frame: Vec<u8> = frame?;
+        match self.table.decode(&frame) {
+            Ok((frame, _consumed)) => Ok(frame),
+            Err(DecodeError::UnexpectedEof) => Err(DecodeError::Malformed),
+            Err(DecodeError::Malformed) => Err(DecodeError::Malformed),
+        }
+    }
+}
+
+impl RzcobsOwned {
+    pub fn new(table: Table) -> Self {
+        Self {
+            table,
+            raw: Vec::new(),
+        }
+    }
+}
+
+impl RzcobsOwned {
+    pub fn received(&mut self, data: &[u8]) {
+        received_inner(&mut self.raw, data);
     }
 
     pub fn frame_and_decode<F: FnMut(&[u8], Option<Frame<'_>>)>(&mut self, mut f: F) -> bool {
@@ -69,52 +116,29 @@ impl<'a> Rzcobs<'a> {
             }
         }
 
-        self.advance(zero);
-        debug_assert!(self.raw.is_empty() || self.raw[0] != 0);
+        advance_inner(&mut self.raw, zero);
+        // debug_assert!(raw.is_empty() || raw[0] != 0);
         true
-    }
-
-    fn advance(&mut self, zero: usize) {
-        // Even if rzcobs_decode failed, pop the data off so we don't get stuck.
-        // Pop off the frame + 1 or more separator zero-bytes
-        if let Some(nonzero) = self.raw[zero..].iter().position(|&x| x != 0) {
-            self.raw.drain(0..zero + nonzero);
-        } else {
-            self.raw.clear();
-        }
     }
 }
 
-impl StreamDecoder for Rzcobs<'_> {
-    fn received(&mut self, mut data: &[u8]) {
-        // Trim zeros from the left, start storing at first non-zero byte.
-        if self.raw.is_empty() {
-            while data.first() == Some(&0) {
-                data = &data[1..]
-            }
+fn received_inner(raw: &mut Vec<u8>, mut data: &[u8]) {
+    // Trim zeros from the left, start storing at first non-zero byte.
+    if raw.is_empty() {
+        while data.first() == Some(&0) {
+            data = &data[1..]
         }
-
-        self.raw.extend_from_slice(data);
     }
 
-    fn decode(&mut self) -> Result<Frame<'_>, DecodeError> {
-        // Find frame separator. If not found, we don't have enough data yet.
-        let zero = self
-            .raw
-            .iter()
-            .position(|&x| x == 0)
-            .ok_or(DecodeError::UnexpectedEof)?;
+    raw.extend_from_slice(data);
+}
 
-        let frame = rzcobs_decode(&self.raw[..zero]);
-        self.advance(zero);
-
-        debug_assert!(self.raw.is_empty() || self.raw[0] != 0);
-
-        let frame: Vec<u8> = frame?;
-        match self.table.decode(&frame) {
-            Ok((frame, _consumed)) => Ok(frame),
-            Err(DecodeError::UnexpectedEof) => Err(DecodeError::Malformed),
-            Err(DecodeError::Malformed) => Err(DecodeError::Malformed),
-        }
+fn advance_inner(raw: &mut Vec<u8>, zero: usize) {
+    // Even if rzcobs_decode failed, pop the data off so we don't get stuck.
+    // Pop off the frame + 1 or more separator zero-bytes
+    if let Some(nonzero) = raw[zero..].iter().position(|&x| x != 0) {
+        raw.drain(0..zero + nonzero);
+    } else {
+        raw.clear();
     }
 }
