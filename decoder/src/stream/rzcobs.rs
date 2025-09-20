@@ -92,6 +92,10 @@ impl RzcobsOwned {
             raw: Vec::new(),
         }
     }
+
+    pub fn table(&self) -> &Table {
+        &self.table
+    }
 }
 
 impl RzcobsOwned {
