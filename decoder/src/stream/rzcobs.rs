@@ -1,5 +1,6 @@
 use super::StreamDecoder;
 use crate::{DecodeError, Frame, Table};
+use std::sync::Arc;
 
 /// Decode a full message.
 ///
@@ -45,7 +46,7 @@ pub struct Rzcobs<'a> {
 }
 
 pub struct RzcobsOwned {
-    table: Table,
+    table: Arc<Table>,
     raw: Vec<u8>,
 }
 
@@ -86,15 +87,15 @@ impl StreamDecoder for Rzcobs<'_> {
 }
 
 impl RzcobsOwned {
-    pub fn new(table: Table) -> Self {
+    pub fn new(table: Arc<Table>) -> Self {
         Self {
             table,
             raw: Vec::new(),
         }
     }
 
-    pub fn table(&self) -> &Table {
-        &self.table
+    pub fn table(&self) -> Arc<Table> {
+        self.table.clone()
     }
 }
 
