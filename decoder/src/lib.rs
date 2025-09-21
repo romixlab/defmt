@@ -184,7 +184,7 @@ impl Table {
         Ok((entry.string.tag.to_level(), &entry.string.string))
     }
 
-    fn get_with_level(&self, index: usize) -> Result<(Option<Level>, &str), ()> {
+    pub fn get_with_level(&self, index: usize) -> Result<(Option<Level>, &str), ()> {
         self._get(index)
     }
 
@@ -280,7 +280,7 @@ impl Table {
 
 // NOTE follows `parser::Type`
 #[derive(Debug, Clone, PartialEq)]
-enum Arg<'t> {
+pub enum Arg<'t> {
     /// Bool
     Bool(bool),
     F32(f32),
@@ -314,7 +314,7 @@ enum Arg<'t> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct FormatSliceElement<'t> {
+pub struct FormatSliceElement<'t> {
     // this will usually be the same format string for all elements; except when the format string
     // is an enum -- in that case `format` will be the variant
     format: &'t str,
