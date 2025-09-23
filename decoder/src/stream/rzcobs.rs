@@ -104,20 +104,24 @@ impl RzcobsOwned {
         received_inner(&mut self.raw, data);
     }
 
-    pub fn frame_and_decode<F: FnMut(&[u8], Option<Frame<'_>>)>(&mut self, mut f: F) -> bool {
+    pub fn frame_and_decode<F: FnMut(&[u8], Option<Frame<'_>>, usize)>(
+        &mut self,
+        mut f: F,
+    ) -> bool {
         // Find frame separator. If not found, we don't have enough data yet.
         let Some(zero) = self.raw.iter().position(|&x| x == 0) else {
             return false;
         };
 
         let frame = rzcobs_decode(&self.raw[..zero]);
+        let decoded_len = frame.as_ref().map(|f| f.len()).unwrap_or(0);
 
         match frame.map(|f| self.table.decode(&f)) {
             Ok(Ok((frame, _consumed))) => {
-                f(&self.raw[..zero], Some(frame));
+                f(&self.raw[..zero], Some(frame), decoded_len);
             }
             Ok(Err(_e)) | Err(_e) => {
-                f(&self.raw[..zero], None);
+                f(&self.raw[..zero], None, decoded_len);
             }
         }
 
