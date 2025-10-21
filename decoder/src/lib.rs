@@ -78,8 +78,8 @@ impl Tag {
 /// Entry in [`Table`] combining a format string with its raw symbol
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableEntry {
-    string: StringEntry,
-    raw_symbol: String,
+    pub string: StringEntry,
+    pub raw_symbol: String,
 }
 
 impl TableEntry {
@@ -99,8 +99,8 @@ impl TableEntry {
 /// A format string and it's [`Tag`]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StringEntry {
-    tag: Tag,
-    string: String,
+    pub tag: Tag,
+    pub string: String,
 }
 
 impl StringEntry {
@@ -182,6 +182,10 @@ impl Table {
     fn _get(&self, index: usize) -> Result<(Option<Level>, &str), ()> {
         let entry = self.entries.get(&index).ok_or(())?;
         Ok((entry.string.tag.to_level(), &entry.string.string))
+    }
+
+    pub fn entries(&self) -> &BTreeMap<usize, TableEntry> {
+        &self.entries
     }
 
     pub fn get_with_level(&self, index: usize) -> Result<(Option<Level>, &str), ()> {
